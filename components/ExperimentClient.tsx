@@ -3,46 +3,42 @@
 import { BlindedResponse, ExperimentApiResponse } from "@/lib/types";
 import { FormEvent, useMemo, useState } from "react";
 
-type RankingValue = "" | "1" | "2" | "3" | "4";
-
-type RankingMap = Record<string, RankingValue>;
+type ConfidenceMap = Record<string, number>;
 
 interface SubmittedRanking {
-  correctness: RankingMap;
-  confidence: RankingMap;
+  correctnessOrder: string[];
+  confidenceScores: ConfidenceMap;
   submittedAt: string;
 }
-
-const rankOptions: RankingValue[] = ["", "1", "2", "3", "4"];
 
 export function ExperimentClient() {
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState<ExperimentApiResponse | null>(null);
-  const [correctnessRank, setCorrectnessRank] = useState<RankingMap>({});
-  const [confidenceRank, setConfidenceRank] = useState<RankingMap>({});
+  const [correctnessOrder, setCorrectnessOrder] = useState<string[]>([]);
+  const [confidenceScores, setConfidenceScores] = useState<ConfidenceMap>({});
   const [rankingError, setRankingError] = useState("");
   const [submittedRanking, setSubmittedRanking] = useState<SubmittedRanking | null>(null);
   const [revealSources, setRevealSources] = useState(false);
-
-  const responseCount = result?.responses.length ?? 0;
+  const [showTranscripts, setShowTranscripts] = useState(false);
+  const [activeTranscriptId, setActiveTranscriptId] = useState("");
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const canSubmitRanking = useMemo(() => {
     if (!result) {
       return false;
     }
 
-    const correctnessValues = result.responses.map((response) => correctnessRank[response.blindId] ?? "");
-    const confidenceValues = result.responses.map((response) => confidenceRank[response.blindId] ?? "");
+    const ids = result.responses.map((response) => response.blindId);
 
     return (
-      allSelected(correctnessValues) &&
-      allSelected(confidenceValues) &&
-      noDuplicates(correctnessValues) &&
-      noDuplicates(confidenceValues)
+      ids.length === correctnessOrder.length &&
+      new Set(correctnessOrder).size === correctnessOrder.length &&
+      ids.every((id) => correctnessOrder.includes(id)) &&
+      ids.every((id) => Number.isFinite(confidenceScores[id]))
     );
-  }, [confidenceRank, correctnessRank, result]);
+  }, [confidenceScores, correctnessOrder, result]);
 
   async function handleRunExperiment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,6 +46,9 @@ export function ExperimentClient() {
     setRankingError("");
     setSubmittedRanking(null);
     setRevealSources(false);
+    setShowTranscripts(false);
+    setActiveTranscriptId("");
+    setDraggingId(null);
 
     if (question.trim().length < 8) {
       setErrorMessage("Enter a fuller question (at least 8 characters).");
@@ -74,8 +73,9 @@ export function ExperimentClient() {
       }
 
       setResult(payload);
-      setCorrectnessRank(makeEmptyRanking(payload.responses));
-      setConfidenceRank(makeEmptyRanking(payload.responses));
+      setCorrectnessOrder(payload.responses.map((response) => response.blindId));
+      setConfidenceScores(makeDefaultConfidenceScores(payload.responses));
+      setActiveTranscriptId(payload.responses[0]?.blindId ?? "");
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unknown error while running experiment.");
       setResult(null);
@@ -92,23 +92,50 @@ export function ExperimentClient() {
       return;
     }
 
-    const correctnessValues = result.responses.map((response) => correctnessRank[response.blindId] ?? "");
-    const confidenceValues = result.responses.map((response) => confidenceRank[response.blindId] ?? "");
+    const ids = result.responses.map((response) => response.blindId);
 
-    if (!allSelected(correctnessValues) || !allSelected(confidenceValues)) {
-      setRankingError("Assign every response a rank for both correctness and confidence.");
+    if (ids.length !== correctnessOrder.length || new Set(correctnessOrder).size !== correctnessOrder.length) {
+      setRankingError("Arrange all responses into a unique correctness order.");
       return;
     }
 
-    if (!noDuplicates(correctnessValues) || !noDuplicates(confidenceValues)) {
-      setRankingError("Each rank can only be used once per metric.");
+    const invalidConfidence = ids.some((id) => !Number.isFinite(confidenceScores[id]));
+    if (invalidConfidence) {
+      setRankingError("Set a confidence score for every response.");
       return;
     }
 
     setSubmittedRanking({
-      correctness: correctnessRank,
-      confidence: confidenceRank,
+      correctnessOrder,
+      confidenceScores,
       submittedAt: new Date().toISOString()
+    });
+  }
+
+  function handleDrop(targetId: string) {
+    if (!draggingId || draggingId === targetId) {
+      return;
+    }
+
+    setCorrectnessOrder((current) => reorderList(current, draggingId, targetId));
+    setDraggingId(null);
+  }
+
+  function moveResponse(id: string, direction: "up" | "down") {
+    setCorrectnessOrder((current) => {
+      const currentIndex = current.indexOf(id);
+      if (currentIndex === -1) {
+        return current;
+      }
+
+      const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+      if (nextIndex < 0 || nextIndex >= current.length) {
+        return current;
+      }
+
+      const next = [...current];
+      [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
+      return next;
     });
   }
 
@@ -136,7 +163,7 @@ export function ExperimentClient() {
         <p className="eyebrow">Capstone MVP</p>
         <h1>Agent Senate</h1>
         <p className="hero-copy">
-          Submit one question to four LLM conditions, view responses blind, and rank them by correctness and confidence.
+          Submit one question to four LLM conditions, view responses blind, drag them into correctness order, and set confidence with sliders.
         </p>
       </section>
 
@@ -190,49 +217,65 @@ export function ExperimentClient() {
 
           <form className="ranking-panel" onSubmit={handleRankingSubmit}>
             <h2>Rank Outputs</h2>
-            <p>Use 1 as highest and 4 as lowest.</p>
+            <p>Drag cards top-to-bottom for correctness (highest to lowest), then set your confidence in each answer.</p>
 
-            {result.responses.map((response) => (
-              <div className="rank-row" key={`rank-${response.blindId}`}>
-                <p>{response.blindId}</p>
-                <label>
-                  Correctness
-                  <select
-                    value={correctnessRank[response.blindId] ?? ""}
-                    onChange={(event) =>
-                      setCorrectnessRank((current) => ({
-                        ...current,
-                        [response.blindId]: event.target.value as RankingValue
-                      }))
-                    }
+            <div className="arrange-list">
+              {correctnessOrder.map((blindId, index) => {
+                const response = result.responses.find((item) => item.blindId === blindId);
+
+                if (!response) {
+                  return null;
+                }
+
+                return (
+                  <article
+                    key={`arrange-${blindId}`}
+                    className={`arrange-card ${draggingId === blindId ? "dragging" : ""}`}
+                    draggable
+                    onDragStart={() => setDraggingId(blindId)}
+                    onDragEnd={() => setDraggingId(null)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => handleDrop(blindId)}
                   >
-                    {rankOptions.slice(0, responseCount + 1).map((option) => (
-                      <option key={`${response.blindId}-correctness-${option || "blank"}`} value={option}>
-                        {option === "" ? "Select rank" : option}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Confidence
-                  <select
-                    value={confidenceRank[response.blindId] ?? ""}
-                    onChange={(event) =>
-                      setConfidenceRank((current) => ({
-                        ...current,
-                        [response.blindId]: event.target.value as RankingValue
-                      }))
-                    }
-                  >
-                    {rankOptions.slice(0, responseCount + 1).map((option) => (
-                      <option key={`${response.blindId}-confidence-${option || "blank"}`} value={option}>
-                        {option === "" ? "Select rank" : option}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            ))}
+                    <div className="arrange-head">
+                      <p>
+                        #{index + 1} {blindId}
+                      </p>
+                      <span className="drag-hint">Drag to reorder</span>
+                    </div>
+                    <p className="arrange-preview">{buildPreview(response.answer)}</p>
+                    <label className="confidence-control">
+                      Confidence in this answer: <strong>{Math.round(confidenceScores[blindId] ?? 50)}%</strong>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={confidenceScores[blindId] ?? 50}
+                        onChange={(event) =>
+                          setConfidenceScores((current) => ({
+                            ...current,
+                            [blindId]: Number.parseInt(event.target.value, 10)
+                          }))
+                        }
+                      />
+                    </label>
+                    <div className="arrange-buttons">
+                      <button type="button" onClick={() => moveResponse(blindId, "up")} disabled={index === 0}>
+                        Move up
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveResponse(blindId, "down")}
+                        disabled={index === correctnessOrder.length - 1}
+                      >
+                        Move down
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
 
             {rankingError ? <p className="error-text">{rankingError}</p> : null}
 
@@ -243,6 +286,9 @@ export function ExperimentClient() {
               <button type="button" onClick={exportRunData} disabled={!submittedRanking}>
                 Export run JSON
               </button>
+              <button type="button" onClick={() => setShowTranscripts((current) => !current)} disabled={!submittedRanking}>
+                {showTranscripts ? "Hide conversations" : "View conversations"}
+              </button>
               <button type="button" onClick={() => setRevealSources((current) => !current)} disabled={!submittedRanking}>
                 {revealSources ? "Hide condition labels" : "Reveal condition labels"}
               </button>
@@ -252,9 +298,67 @@ export function ExperimentClient() {
           {submittedRanking ? (
             <RankingSummary responses={result.responses} submittedRanking={submittedRanking} />
           ) : null}
+
+          {submittedRanking && showTranscripts ? (
+            <TranscriptViewer
+              responses={result.responses}
+              activeTranscriptId={activeTranscriptId}
+              onTranscriptChange={setActiveTranscriptId}
+            />
+          ) : null}
         </section>
       ) : null}
     </main>
+  );
+}
+
+function TranscriptViewer({
+  responses,
+  activeTranscriptId,
+  onTranscriptChange
+}: {
+  responses: BlindedResponse[];
+  activeTranscriptId: string;
+  onTranscriptChange: (value: string) => void;
+}) {
+  const activeResponse =
+    responses.find((response) => response.blindId === activeTranscriptId) ?? responses[0] ?? null;
+
+  if (!activeResponse) {
+    return null;
+  }
+
+  return (
+    <section className="panel transcript-panel">
+      <h2>Post-Rating Conversation View</h2>
+      <p>Unlocked after rating to reduce bias. Select a blinded response to inspect its full discussion transcript.</p>
+      <div className="transcript-tabs">
+        {responses.map((response) => (
+          <button
+            key={`transcript-tab-${response.blindId}`}
+            type="button"
+            className={`transcript-tab ${response.blindId === activeResponse.blindId ? "active" : ""}`}
+            onClick={() => onTranscriptChange(response.blindId)}
+          >
+            {response.blindId}
+          </button>
+        ))}
+      </div>
+      <div className="transcript-thread">
+        {activeResponse.transcript.length === 0 ? (
+          <p>No transcript available for this response.</p>
+        ) : (
+          activeResponse.transcript.map((turn, index) => (
+            <article className="transcript-turn" key={`${activeResponse.blindId}-${turn.round}-${index}`}>
+              <p className="turn-meta">
+                Round {turn.round} - {turn.agentName}
+              </p>
+              <p className="turn-content">{turn.content}</p>
+            </article>
+          ))
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -265,51 +369,52 @@ function RankingSummary({
   responses: BlindedResponse[];
   submittedRanking: SubmittedRanking;
 }) {
-  const correctness = orderByRank(responses, submittedRanking.correctness);
-  const confidence = orderByRank(responses, submittedRanking.confidence);
+  const correctness = submittedRanking.correctnessOrder
+    .map((id) => responses.find((response) => response.blindId === id))
+    .filter((response): response is BlindedResponse => response !== undefined);
 
   return (
     <section className="panel summary-panel">
       <h2>Saved Ranking</h2>
       <p>Submitted at {new Date(submittedRanking.submittedAt).toLocaleTimeString()}.</p>
-      <div className="summary-grid">
-        <div>
-          <h3>Correctness (High to Low)</h3>
-          <ol>
-            {correctness.map((response) => (
-              <li key={`correctness-${response.blindId}`}>{response.blindId}</li>
-            ))}
-          </ol>
-        </div>
-        <div>
-          <h3>Confidence (High to Low)</h3>
-          <ol>
-            {confidence.map((response) => (
-              <li key={`confidence-${response.blindId}`}>{response.blindId}</li>
-            ))}
-          </ol>
-        </div>
-      </div>
+      <h3>Correctness Order with Confidence</h3>
+      <ol>
+        {correctness.map((response) => (
+          <li key={`correctness-${response.blindId}`}>
+            {response.blindId} ({Math.round(submittedRanking.confidenceScores[response.blindId] ?? 0)}% confidence)
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
 
-function makeEmptyRanking(responses: BlindedResponse[]): RankingMap {
-  return responses.reduce<RankingMap>((accumulator, response) => {
-    accumulator[response.blindId] = "";
+function makeDefaultConfidenceScores(responses: BlindedResponse[]): ConfidenceMap {
+  return responses.reduce<ConfidenceMap>((accumulator, response) => {
+    accumulator[response.blindId] = 50;
     return accumulator;
   }, {});
 }
 
-function allSelected(values: RankingValue[]): boolean {
-  return values.every((value) => value !== "");
+function reorderList(list: string[], sourceId: string, targetId: string): string[] {
+  const sourceIndex = list.indexOf(sourceId);
+  const targetIndex = list.indexOf(targetId);
+
+  if (sourceIndex === -1 || targetIndex === -1) {
+    return list;
+  }
+
+  const next = [...list];
+  const [moved] = next.splice(sourceIndex, 1);
+  next.splice(targetIndex, 0, moved);
+  return next;
 }
 
-function noDuplicates(values: RankingValue[]): boolean {
-  const filtered = values.filter((value) => value !== "");
-  return new Set(filtered).size === filtered.length;
-}
+function buildPreview(answer: string): string {
+  const normalized = answer.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 180) {
+    return normalized;
+  }
 
-function orderByRank(responses: BlindedResponse[], ranks: RankingMap): BlindedResponse[] {
-  return [...responses].sort((left, right) => Number.parseInt(ranks[left.blindId], 10) - Number.parseInt(ranks[right.blindId], 10));
+  return `${normalized.slice(0, 177)}...`;
 }

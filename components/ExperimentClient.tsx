@@ -351,7 +351,7 @@ function TranscriptViewer({
           activeResponse.transcript.map((turn, index) => (
             <article className="transcript-turn" key={`${activeResponse.blindId}-${turn.round}-${index}`}>
               <p className="turn-meta">
-                Round {turn.round} - {turn.agentName}
+                Round {turn.round} - {turn.agentName} ({turn.provider}/{turn.model})
               </p>
               <p className="turn-content">{turn.content}</p>
             </article>

@@ -500,7 +500,7 @@ function buildGeminiBackedMixedAgents(geminiModel: string): DebateAgent[] {
   return [
     {
       id: "chatgpt_slot",
-      name: "ChatGPT Slot (Gemini backend)",
+      name: "ChatGPT Slot",
       provider: "gemini",
       model: geminiModel,
       persona:
@@ -509,7 +509,7 @@ function buildGeminiBackedMixedAgents(geminiModel: string): DebateAgent[] {
     },
     {
       id: "claude_slot",
-      name: "Claude Slot (Gemini backend)",
+      name: "Claude Slot",
       provider: "gemini",
       model: geminiModel,
       persona:
@@ -525,7 +525,7 @@ function buildGeminiBackedMixedAgents(geminiModel: string): DebateAgent[] {
     },
     {
       id: "grok_slot",
-      name: "Grok Slot (Gemini backend)",
+      name: "Grok Slot",
       provider: "gemini",
       model: geminiModel,
       persona:

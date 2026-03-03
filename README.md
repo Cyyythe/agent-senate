@@ -41,6 +41,8 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+If you change `.env.local`, restart `npm run dev` so server-side API routes pick up new values.
+
 ## Environment variables
 
 See `.env.example` for all keys. Minimum needed for real runs:

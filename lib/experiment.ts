@@ -11,10 +11,10 @@ import {
 } from "@/lib/types";
 
 const MAX_SINGLE_RESPONSE_TOKENS = 1000;
-const MAX_DEBATE_RESPONSE_TOKENS = Number.parseInt(process.env.DEBATE_MAX_OUTPUT_TOKENS ?? "450", 10);
-const DEFAULT_DEBATE_ROUNDS = Number.parseInt(process.env.DEBATE_ROUNDS ?? "2", 10);
-const FORCE_GEMINI_ONLY = (process.env.FORCE_GEMINI_ONLY ?? "true").toLowerCase() === "true";
-const SERIALIZE_CONDITIONS = (process.env.SERIALIZE_CONDITIONS ?? "true").toLowerCase() === "true";
+const MAX_DEBATE_RESPONSE_TOKENS = Number.parseInt(process.env.DEBATE_MAX_OUTPUT_TOKENS ?? "700", 10);
+const DEFAULT_DEBATE_ROUNDS = Number.parseInt(process.env.DEBATE_ROUNDS ?? "3", 10);
+const FORCE_GEMINI_ONLY = (process.env.FORCE_GEMINI_ONLY ?? "false").toLowerCase() === "true";
+const SERIALIZE_CONDITIONS = (process.env.SERIALIZE_CONDITIONS ?? "false").toLowerCase() === "true";
 
 const CORE_SINGLE_INSTRUCTIONS = [
   "You are helping evaluate answer quality for a capstone project.",

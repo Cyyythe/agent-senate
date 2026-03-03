@@ -50,12 +50,12 @@ See `.env.example` for all keys. Minimum needed for real runs:
 - `GEMINI_API_KEY`
 - `XAI_API_KEY`
 
-For your current setup (`FORCE_GEMINI_ONLY=true`), only `GEMINI_API_KEY` is required.
+If using Gemini-only mode (`FORCE_GEMINI_ONLY=true`), only `GEMINI_API_KEY` is required.
 
 During early development, `ALLOW_MOCK_RESPONSES=true` returns placeholder text when keys are missing.
 
-`FORCE_GEMINI_ONLY=true` is enabled by default so all four conditions run on Gemini right now.
-Set it to `false` when you are ready to switch back to real multi-provider runs.
+`FORCE_GEMINI_ONLY=false` is the default and runs the real multi-provider setup (OpenAI + Anthropic + Gemini + xAI).
+Set `FORCE_GEMINI_ONLY=true` only when you want temporary Gemini-backed stand-in mode.
 
 For quota-limited Gemini keys, the project now defaults to slower/safer settings:
 - `SERIALIZE_CONDITIONS=true` (run each condition one after another)

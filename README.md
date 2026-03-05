@@ -7,9 +7,15 @@ MVP website for your capstone experiment comparing four LLM answer-generation co
 3. Multi-agent debate using 4 copies of ChatGPT with different roles
 4. Single ChatGPT answer with a role prompt
 
-Users submit one question, review four blinded outputs, rank each by correctness and confidence, and optionally reveal condition labels after ranking.
-After ranking, they can also inspect each response's full agent conversation transcript.
-Ranking is done by dragging blinded response cards into order (high to low correctness) and setting a per-response confidence slider.
+Users now follow a multi-page survey flow:
+
+1. Home page (`/`) with actions for live or preset runs
+2. Ask question page (`/ask`)
+3. Blind review + ranking page (`/review/[runId]`)
+4. Saved results page (`/results/[runId]`) with revealed labels, transcript viewer, and informed re-ranking
+
+Preset control questions (`/presets`) let participants repeat the ranking process without additional API calls.
+Ranking is drag-to-order (correctness) plus per-response confidence sliders.
 
 ## Stack
 

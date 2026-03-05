@@ -1,5 +1,5 @@
-import { ExperimentClient } from "@/components/ExperimentClient";
+import { HomeClient } from "@/components/HomeClient";
 
 export default function HomePage() {
-  return <ExperimentClient />;
+  return <HomeClient />;
 }
